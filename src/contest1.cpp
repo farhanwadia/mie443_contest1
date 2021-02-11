@@ -189,6 +189,7 @@ void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pS
             update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
             //go straight();
         }
+    }
 }
 
 int main(int argc, char **argv){

@@ -176,6 +176,15 @@ void away(int leftAway, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, ui
     }
 }
 
+
+void wall_turnaround(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+                    const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+        // Rotates turtlebot when going along a wall depending on which bumper is hit
+        angular = M_PI*2;
+        linear = 0;
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+}
+
 void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
         const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     while(true){

@@ -4,10 +4,8 @@
 #include <kobuki_msgs/BumperEvent.h>
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Odometry.h>
-
 #include <stdio.h>
 #include <cmath>
-
 #include <chrono>
 #include <tf/transform_datatypes.h>
 

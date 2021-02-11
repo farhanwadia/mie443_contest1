@@ -199,8 +199,7 @@ void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pS
             //go straight();
         }
     }
-  }
-
+}
 
 int main(int argc, char **argv){
     ros::init(argc, argv, "image_listener");

@@ -20,7 +20,7 @@ uint8_t bumper[3] = {kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEven
 const uint8_t LEFT = 0, CENTER = 1, RIGHT = 2;
 
 float minLaserDist = std::numeric_limits<float>::infinity();
-int32_t nLasers=0, desiredNLasers=0, desiredAngle=5; 
+int32_t nLasers=0, desiredNLasers=0, desiredAngle=20; 
 
 void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
 	//fill with your code
@@ -29,12 +29,12 @@ void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
 }
 
 void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
-	  minLaserDist = std::numeric_limits<float>::infinity();
+	minLaserDist = std::numeric_limits<float>::infinity();
     nLasers = (msg->angle_max - msg->angle_min) / msg->angle_increment;
     desiredNLasers = DEG2RAD(desiredAngle)/msg->angle_increment;
     ROS_INFO("Size of laser scan array: %i and size of offset: %i. Laser Distance %f", nLasers, desiredNLasers, minLaserDist);
 
-    if (desiredAngle * M_PI / 180 < msg->angle_max && -desiredAngle * M_PI / 180 > msg->angle_min) {
+    if (DEG2RAD(desiredAngle) < msg->angle_max && DEG2RAD(-desiredAngle) > msg->angle_min) {
         for (uint32_t laser_idx = nLasers / 2 - desiredNLasers; laser_idx < nLasers / 2 + desiredNLasers; ++laser_idx){
             minLaserDist = std::min(minLaserDist, msg->ranges[laser_idx]);
         }
@@ -80,21 +80,35 @@ bool anyBumperPressed(){
     return any_bumper_pressed;
 }
 
+void moveThruDistance(float desired_dist, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
+                    uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    int i = 0;
+    float current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
+    while (current_dist < fabs(desired_dist) && i < 250){
+        ros::spinOnce();
+        angular = 0;
+        linear = copysign(0.15, desired_dist); //move 0.15 m/s in direction of desired_dist
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
+        current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
+        i+=1;
+    }
+}
+
 void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool breakEarly, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
                     uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     //Rotates turtlebot angleRAD rad CW or CCW in place depending on angleRAD's sign at pi/6 rad/s
-    ROS_INFO("In rotating thru. \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Desired angle: %f \n", yawStart, yaw, minLaserDist, angleRAD);
+    int i = 0;
+    ROS_INFO("In rotating thru. \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Desired angle: %f", yawStart, yaw, minLaserDist, angleRAD);
     ROS_INFO("Condition check: %i", fabs(yaw - yawStart) <= fabs(angleRAD));
 
-    while (fabs(yaw - yawStart) <= fabs(angleRAD)){
+    while (fabs(yaw - yawStart) <= fabs(angleRAD) && i < 250){
         ros::spinOnce();
-        ROS_INFO("ROTATING %f \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n", angleRAD, yawStart, yaw, minLaserDist);
+        ROS_INFO("ROTATING %f \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Iter: %i", angleRAD, yawStart, yaw, minLaserDist, i);
         ROS_INFO("Condition check %i \n LS: %f \n RS %f \n", fabs(yaw - yawStart) <= fabs(angleRAD), fabs(yaw - yawStart), fabs(angleRAD));
         angular = copysign(M_PI/6, angleRAD); //turn pi/6 rad/s in direction of angleRAD
         linear = 0;
         update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
 
-        ros::spinOnce();
         if (anyBumperPressed()){
             ROS_INFO("Breaking out of rotate due to bumper press \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
             break;
@@ -103,7 +117,7 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
             ROS_INFO("Breaking out of rotate due to large distance");
             break;
         }
-
+        i +=1;
     }
 }
 
@@ -254,17 +268,25 @@ int main(int argc, char **argv){
         }
         else{
             ROS_INFO("Bumper pressed or laser inf \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
+            if (minLaserDist > 0.6){
+                linear = -0.1;
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(M_PI, yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            }
             if (bumper[CENTER]){
                 linear = -0.1;
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
                 rotateThruAngle(DEG2RAD(180), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
             else if (bumper[LEFT]){
                 linear = -0.1;
-                rotateThruAngle(DEG2RAD(-120), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD(-90), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
             else if (bumper[RIGHT]){
                 linear = -0.1;
-                rotateThruAngle(DEG2RAD(120), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD(90), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
             else{
                 ROS_INFO("Entering random rotation with laser inf");

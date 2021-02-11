@@ -110,6 +110,75 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
     }
 }
 
+void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    while(true){
+        if(minLaserDist < 0.6){
+            linear = 0;
+            angular = 0;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //edge();
+        }
+        if (randBetween(0,1) < 0.3){
+            //depart();
+        }
+        if (minLaserDist < 0.6){
+            //corner();
+        }
+        if (randBetween(0,1) < 0.4){
+            //wall_turnaround();
+        }
+        
+        angular = randBetween(-M_PI/12, M_PI/12);
+        linear = 0.25* (M_PI/6 - abs(angular))/(M_PI/6);
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+    }
+}
+
+void edge(int leftAway, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    while(true){
+        linear = 0.25;
+        angular = -leftAway*0.3/minLaserDist;
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+
+        if (randBetween(0, 1) < 0.4){
+            linear = 0;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //away();
+        }
+        if (minLaserDist < 0.6){
+            angular = 0;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //wall_barrier();
+        }
+        if (minLaserDist > 0.75 && minLaserDist < 7){
+            angular = 0;
+            linear = 0.25;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //straight();
+        } 
+    }
+}
+
+void away(int leftAway, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    int i = 0;
+    while(true){
+        float targetAngle = leftAway*DEG2RAD(26) + yaw;
+        angular = fmin(M_PI/6, 3*targetAngle);
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+
+        if ((minLaserDist > 0.75 && minLaserDist < 7) || (minLaserDist < 0.75 && abs(yaw - targetAngle) < RAD2DEG(5.7)) || i>= 15){
+            //straight();
+        }
+        if (minLaserDist < 0.6){
+            //wall_barrier();
+        }
+        i += 1;
+    }
+}
+
 int main(int argc, char **argv){
     ros::init(argc, argv, "image_listener");
     ros::NodeHandle nh;
@@ -153,7 +222,7 @@ int main(int argc, char **argv){
             else if (minLaserDist > 0.6 && minLaserDist <= 0.75){
                 ROS_INFO("Slowing down");
                 linear = 0.1;
-                angular = randBetween(-M_PI/12, M_PI/12);
+                angular = randBetween(-M_PI/6, M_PI/6);
             }
             else{
                 //Rotate pi degrees

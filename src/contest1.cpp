@@ -15,7 +15,7 @@
 
 float angular = 0.0;
 float linear = 0.0;
-float posX = 0.0, posY = 0.0, yaw = 0.0, yawStart = 0.0;
+float posX = 0.0, posY = 0.0, yaw = 0.0, yawStart = 0.0 , posXStart = 0.0;
 uint8_t bumper[3] = {kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED};
 const uint8_t LEFT = 0, CENTER = 1, RIGHT = 2;
 
@@ -120,6 +120,31 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
         i +=1;
     }
 }
+
+void if_stuck(float posXStart, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    int i = 0;
+    ROS_INFO("Checking if I'm stuck. \n Start x pos: %f \n Current x pos: %f", posXStart, posX);
+    
+    while (fabs(posX - posXStart) <= 0.05 && i < 100){
+        ros::spinOnce();
+        ROS_INFO("Likely stuck. Start x pos: %f \n Current x pos: %f \n Iter: %i", posXStart, posX, i);
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
+
+        if(!anyBumperPressed()){
+            ROS_INFO("No bumper pressed anymore. Breaking out of stuck check"); //Should I tell it to do smthg like reverse? What if it loops back to this point?
+            break;
+        }
+        if(i == 100){
+            ROS_INFO("Reversing out of stuck area");
+            moveThruDistance(-0.15, posX, posY, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            rotateThruAngle(M_PI, yaw, minLaserDist, true, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+        }
+        i +=1;
+    }
+    
+    
+        }
 
 void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
         const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){

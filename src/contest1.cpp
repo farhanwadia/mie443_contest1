@@ -67,6 +67,14 @@ void update(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSec
     ros::spinOnce();
 }
 
+bool anyBumperPressed(){
+    bool any_bumper_pressed = false;
+    for (uint32_t b_idx = 0; b_idx < N_BUMPER; ++b_idx) {
+        any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
+    }
+    return any_bumper_pressed;
+}
+
 void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, 
                     uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     //Rotates turtlebot angleRAD rad CW or CCW in place depending on angleRAD's sign at pi/6 rad/s
@@ -94,6 +102,21 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, geome
         } */
 
     }
+}
+
+void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    while(true){
+        
+        bool any_bumper_pressed = false;
+        any_bumper_pressed = anyBumperPressed();
+
+        if(minLaserDist > 0.7 && !any_bumper_pressed){
+            linear = 0.25;
+            angular = 0;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //go straight();
+        }
 }
 
 int main(int argc, char **argv){

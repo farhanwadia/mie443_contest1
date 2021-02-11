@@ -32,6 +32,7 @@ void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
 
 void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
 	//fill with your code
+    minLaserDist = std::numeric_limits<float>::infinity();
     nLasers = (msg->angle_max - msg->angle_min) / msg->angle_increment;
     desiredNLasers = DEG2RAD(desiredAngle)/msg->angle_increment;
     ROS_INFO("Size of laser scan array: %i and size of offset: %i", nLasers, desiredNLasers);
@@ -98,6 +99,14 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, geome
 
     }
 }
+
+void wall_turnaround(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+                    const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+        // Rotates turtlebot when going along a wall depending on which bumper is hit
+        angular = M_PI*2;
+        linear = 0;
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+    }
 
 int main(int argc, char **argv){
     ros::init(argc, argv, "image_listener");

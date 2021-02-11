@@ -107,6 +107,20 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
     }
 }
 
+void moveThruDistance(float desired_dist, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
+                    uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    int i = 0;
+    float current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
+    while (current_dist < fabs(desired_dist) && i < 50){
+        ros::spinOnce();
+        angular = 0;
+        linear = copysign(0.15, desired_dist); //move 0.15 m/s in direction of desired_dist
+        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
+        current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
+        i+=1;
+    }
+}
+
 void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
         const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     while(true){

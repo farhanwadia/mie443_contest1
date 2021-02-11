@@ -4,10 +4,8 @@
 #include <kobuki_msgs/BumperEvent.h>
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Odometry.h>
-
 #include <stdio.h>
 #include <cmath>
-
 #include <chrono>
 #include <tf/transform_datatypes.h>
 
@@ -31,8 +29,7 @@ void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
 }
 
 void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
-	//fill with your code
-    minLaserDist = std::numeric_limits<float>::infinity();
+	  minLaserDist = std::numeric_limits<float>::infinity();
     nLasers = (msg->angle_max - msg->angle_min) / msg->angle_increment;
     desiredNLasers = DEG2RAD(desiredAngle)/msg->angle_increment;
     ROS_INFO("Size of laser scan array: %i and size of offset: %i. Laser Distance %f", nLasers, desiredNLasers, minLaserDist);
@@ -83,7 +80,7 @@ bool anyBumperPressed(){
     return any_bumper_pressed;
 }
 
-void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool breakEarly, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, 
+void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool breakEarly, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
                     uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     //Rotates turtlebot angleRAD rad CW or CCW in place depending on angleRAD's sign at pi/6 rad/s
     ROS_INFO("In rotating thru. \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Desired angle: %f \n", yawStart, yaw, minLaserDist, angleRAD);
@@ -177,6 +174,21 @@ void away(int leftAway, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, ui
         }
         i += 1;
     }
+}
+
+void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
+        const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    while(true){
+        
+        bool any_bumper_pressed = false;
+        any_bumper_pressed = anyBumperPressed();
+
+        if(minLaserDist > 0.7 && !any_bumper_pressed){
+            linear = 0.25;
+            angular = 0;
+            update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            //go straight();
+        }
 }
 
 int main(int argc, char **argv){

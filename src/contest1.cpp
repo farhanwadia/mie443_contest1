@@ -242,6 +242,8 @@ int main(int argc, char **argv){
         bool any_bumper_pressed = false;
         any_bumper_pressed = anyBumperPressed();
 
+ 
+
         if (!any_bumper_pressed && minLaserDist < 7){
             if (minLaserDist > 0.75){
                 ROS_INFO("Clear path");
@@ -263,7 +265,7 @@ int main(int argc, char **argv){
             else{
                 //Rotate pi degrees
                 ROS_INFO("Small Distance. Rotating pi");
-                rotateThruAngle(M_PI, yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
         }
         else if (any_bumper_pressed) {

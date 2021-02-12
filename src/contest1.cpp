@@ -3,6 +3,7 @@
 #include <geometry_msgs/Twist.h>
 #include <kobuki_msgs/BumperEvent.h>
 #include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 #include <stdio.h>
 #include <cmath>
@@ -15,11 +16,11 @@
 
 float angular = 0.0;
 float linear = 0.0;
-float posX = 0.0, posY = 0.0, yaw = 0.0, yawStart = 0.0 , posXStart = 0.0;
+float posX = 0.0, posY = 0.0, yaw = 0.0, yaw_imu = 0.0, yawStart = 0.0, vel_odom = 0.0, accX = 0.0, accY = 0.0;
 uint8_t bumper[3] = {kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED, kobuki_msgs::BumperEvent::RELEASED};
 const uint8_t LEFT = 0, CENTER = 1, RIGHT = 2;
 
-float minLaserDist = std::numeric_limits<float>::infinity();
+float minLaserDist = std::numeric_limits<float>::infinity(), minLSLaserDist = std::numeric_limits<float>::infinity(), minRSLaserDist = std::numeric_limits<float>::infinity();
 int32_t nLasers=0, desiredNLasers=0, desiredAngle=20; 
 
 void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
@@ -37,11 +38,23 @@ void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
     if (DEG2RAD(desiredAngle) < msg->angle_max && DEG2RAD(-desiredAngle) > msg->angle_min) {
         for (uint32_t laser_idx = nLasers / 2 - desiredNLasers; laser_idx < nLasers / 2 + desiredNLasers; ++laser_idx){
             minLaserDist = std::min(minLaserDist, msg->ranges[laser_idx]);
+            if (laser_idx <= nLasers / 2){
+                minLSLaserDist = std::min(minLSLaserDist, msg->ranges[laser_idx]);
+            }
+            else{
+                minRSLaserDist = std::min(minRSLaserDist, msg->ranges[laser_idx]);
+            }
         }
     }
     else {
         for (uint32_t laser_idx = 0; laser_idx < nLasers; ++laser_idx) {
             minLaserDist = std::min(minLaserDist, msg->ranges[laser_idx]);
+            if (laser_idx <= nLasers / 2){
+                minLSLaserDist = std::min(minLSLaserDist, msg->ranges[laser_idx]);
+            }
+            else{
+                minRSLaserDist = std::min(minRSLaserDist, msg->ranges[laser_idx]);
+            }
         }
     }
 }
@@ -50,8 +63,16 @@ void odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
     posX = msg->pose.pose.position.x;
     posY = msg->pose.pose.position.y;
     yaw = tf::getYaw(msg->pose.pose.orientation);
-    tf::getYaw(msg->pose.pose.orientation);
-    ROS_INFO("Position: (%f, %f) Orientation: %f rad or %f degrees.", posX, posY, yaw, RAD2DEG(yaw));
+    //tf::getYaw(msg->pose.pose.orientation);
+    vel_odom = msg->twist.twist.linear.x;
+    ROS_INFO("Position: (%f, %f) \n Orientation: %f rad or %f degrees. \n Velocity: %f", posX, posY, yaw, RAD2DEG(yaw), vel_odom);
+}
+
+void imuCallback(const sensor_msgs::Imu::ConstPtr& msg){
+    yaw_imu = msg->angular_velocity.z;
+    accX = msg->linear_acceleration.x;
+    accY = msg->linear_acceleration.y;
+    ROS_INFO("Acceleration: (%f, %f) \n IMU Yaw: %f rad or %f degrees.", accX, accY, yaw_imu, RAD2DEG(yaw_imu));
 }
 
 template <class T>
@@ -84,7 +105,7 @@ void moveThruDistance(float desired_dist, float startX, float startY, geometry_m
                     uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     int i = 0;
     float current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
-    while (current_dist < fabs(desired_dist) && i < 250){
+    while (current_dist < fabs(desired_dist) && i < 250 && *pSecondsElapsed < 900){
         ros::spinOnce();
         angular = 0;
         linear = copysign(0.15, desired_dist); //move 0.15 m/s in direction of desired_dist
@@ -101,7 +122,7 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
     ROS_INFO("In rotating thru. \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Desired angle: %f", yawStart, yaw, minLaserDist, angleRAD);
     ROS_INFO("Condition check: %i", fabs(yaw - yawStart) <= fabs(angleRAD));
 
-    while (fabs(yaw - yawStart) <= fabs(angleRAD) && i < 250){
+    while (fabs(yaw - yawStart) <= fabs(angleRAD) && i < 250 && *pSecondsElapsed < 900){
         ros::spinOnce();
         ROS_INFO("ROTATING %f \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Iter: %i", angleRAD, yawStart, yaw, minLaserDist, i);
         ROS_INFO("Condition check %i \n LS: %f \n RS %f \n", fabs(yaw - yawStart) <= fabs(angleRAD), fabs(yaw - yawStart), fabs(angleRAD));
@@ -155,13 +176,13 @@ void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t
             update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
             //edge();
         }
-        if (randBetween(0,1) < 0.3){
+        if (randBetween(0.0, 1.0) < 0.3){
             //depart();
         }
         if (minLaserDist < 0.6){
             //corner();
         }
-        if (randBetween(0,1) < 0.4){
+        if (randBetween(0.0, 1.0) < 0.4){
             //wall_turnaround();
         }
         
@@ -178,7 +199,7 @@ void edge(int leftAway, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, ui
         angular = -leftAway*0.3/minLaserDist;
         update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
 
-        if (randBetween(0, 1) < 0.4){
+        if (randBetween(0.0, 1.0) < 0.4){
             linear = 0;
             update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
             //away();
@@ -247,6 +268,7 @@ int main(int argc, char **argv){
     ros::Subscriber bumper_sub = nh.subscribe("mobile_base/events/bumper", 10, &bumperCallback);
     ros::Subscriber laser_sub = nh.subscribe("scan", 10, &laserCallback);
     ros::Subscriber odom = nh.subscribe("odom", 1, &odomCallback);
+    ros::Subscriber imu = nh.subscribe("imu_data", 1, &imuCallback);
     
     ros::Publisher vel_pub = nh.advertise<geometry_msgs::Twist>("cmd_vel_mux/input/teleop", 1);
     geometry_msgs::Twist vel; 
@@ -283,7 +305,17 @@ int main(int argc, char **argv){
             else if (minLaserDist > 0.6 && minLaserDist <= 0.75){
                 ROS_INFO("Slowing down");
                 linear = 0.1;
-                angular = randBetween(-M_PI/6, M_PI/6);
+                if (randBetween(0.0, 1.0) < 0.3) {
+                    if (minLSLaserDist > minRSLaserDist){
+                        angular = randBetween(0.0, M_PI/6);
+                    }
+                    else{
+                        angular = randBetween(-M_PI/6, 0.0);
+                    }
+                }
+                else{
+                    angular = randBetween(-M_PI/6, M_PI/6);
+                }
             }
             else{
                 //Rotate pi degrees
@@ -315,12 +347,11 @@ int main(int argc, char **argv){
             }
             else{
                 ROS_INFO("Entering random rotation with laser inf");
-                rotateThruAngle(randBetween(-M_PI, M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(randBetween(-2*M_PI, 2*M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
         }
-
         update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
     }
-
+    ROS_INFO("15 minutes elapsed");
     return 0;
 }

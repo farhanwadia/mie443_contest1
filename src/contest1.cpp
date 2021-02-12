@@ -77,7 +77,33 @@ bool anyBumperPressed(){
     for (uint32_t b_idx = 0; b_idx < N_BUMPER; ++b_idx) {
         any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
     }
-    return any_bumper_pressed;
+    while (any_bumper_pressed == 1) {
+        if (any_bumper_pressed == 0) {
+            return any_bumper_pressed
+        }
+        ROS_INFO("Bumper pressed or laser inf \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
+        if (bumper[CENTER]){
+            //linear = -0.1;
+            moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            rotateThruAngle(DEG2RAD(180), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
+            }
+        else if (bumper[LEFT]){
+            //linear = -0.1;
+            rotateThruAngle(DEG2RAD(45), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
+            }
+        else if (bumper[RIGHT]){
+            //linear = -0.1;
+            rotateThruAngle(DEG2RAD(-45), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
+            }
+    }
 }
 
 void moveThruDistance(float desired_dist, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
@@ -121,20 +147,6 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, bool 
     }
 }
 
-void moveThruDistance(float desired_dist, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
-                    uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    int i = 0;
-    float current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
-    while (current_dist < fabs(desired_dist) && i < 50){
-        ros::spinOnce();
-        angular = 0;
-        linear = copysign(0.15, desired_dist); //move 0.15 m/s in direction of desired_dist
-        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
-        current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
-        i+=1;
-    }
-}
-
 void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
         const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
     while(true){
@@ -155,7 +167,7 @@ void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t
         }
         
         angular = randBetween(-M_PI/12, M_PI/12);
-        linear = 0.25* (M_PI/6 - abs(angular))/(M_PI/6);
+        linear = 0.25 * (M_PI/6 - abs(angular))/(M_PI/6);
         update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
     }
 }

@@ -77,37 +77,7 @@ bool anyBumperPressed(){
     for (uint32_t b_idx = 0; b_idx < N_BUMPER; ++b_idx) {
         any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
     }
-    return any_bumper_pressed
-    
-void BumperHandling(bool any_bumper_pressed, float startX, float startY,float yawStart, float laserDistStart, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
-                    uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    while (any_bumper_pressed == 1) {
-        if (any_bumper_pressed == 0) {
-            break;
-        }
-        ROS_INFO("Bumper pressed or laser inf \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
-        if (bumper[CENTER]){
-            //linear = -0.1;
-            moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            rotateThruAngle(DEG2RAD(180), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
-            }
-        else if (bumper[LEFT]){
-            //linear = -0.1;
-            rotateThruAngle(DEG2RAD(45), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);        
-            moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
-            }
-        else if (bumper[RIGHT]){
-            //linear = -0.1;
-            rotateThruAngle(DEG2RAD(-45), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            any_bumper_pressed |= (bumper[b_idx] == kobuki_msgs::BumperEvent::PRESSED);
-            }
-    }
+    return any_bumper_pressed;
 }
 
 void moveThruDistance(float desired_dist, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
@@ -171,7 +141,7 @@ void wall_barrier(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t
         }
         
         angular = randBetween(-M_PI/12, M_PI/12);
-        linear = 0.25 * (M_PI/6 - abs(angular))/(M_PI/6);
+        linear = 0.25* (M_PI/6 - abs(angular))/(M_PI/6);
         update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
     }
 }
@@ -243,7 +213,7 @@ void straight(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pS
             //go straight();
         }
     }
-}
+  }
 
 int main(int argc, char **argv){
     ros::init(argc, argv, "image_listener");
@@ -296,16 +266,34 @@ int main(int argc, char **argv){
                 rotateThruAngle(M_PI, yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
         }
-        else{
-            BumperHandling(any_bumper_pressed, posX, posY, yaw, minLaserDist, &vel, &vel_pub, &secondsElapsed, start, &loop_rate)
+        else if (any_bumper_pressed) {
+            ROS_INFO("Bumper pressed or laser inf \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
+            if (minLaserDist > 0.6){
+                linear = -0.1;
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*90), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            }            
+            if (bumper[CENTER]){
+                //linear = -0.1;
+                moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
+            else if (bumper[LEFT]){
+                //linear = -0.1;
+                rotateThruAngle(DEG2RAD(-90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);        
+                moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
+            else if (bumper[RIGHT]){
+                //linear = -0.1;
+                rotateThruAngle(DEG2RAD(90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
             else{
-                ROS_INFO("Entering random rotation with laser inf");
-                rotateThruAngle(randBetween(-M_PI, M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            ROS_INFO("Entering random rotation with laser inf");
+            rotateThruAngle(randBetween(-M_PI, M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
         }
-
-        update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+    update(&vel, &vel_pub, &secondsElapsed, start, &loop_rate);
     }
-
     return 0;
 }

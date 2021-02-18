@@ -284,8 +284,6 @@ void if_stuck(float posXStart, geometry_msgs::Twist* pVel, ros::Publisher* pVel_
         }
         i +=1;
     }
-    
-    
 }
 
 int main(int argc, char **argv){
@@ -414,6 +412,35 @@ int main(int argc, char **argv){
                 //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
                 rotateThruAngle(DEG2RAD(90), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
+/* HENRY START
+                //Rotate pi degrees
+                ROS_INFO("Small Distance. Rotating pi");
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            }
+        }
+        else if (any_bumper_pressed) {
+            ROS_INFO("Bumper pressed or laser inf \n Left: %d \n Center: %d \n Right: %d \n", bumper[LEFT], bumper[CENTER], bumper[RIGHT]);
+            if (minLaserDist > 0.6){
+                linear = -0.1;
+                //moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*90), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+            }            
+            if (bumper[CENTER]){
+                //linear = -0.1;
+                moveThruDistance(-0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(DEG2RAD((randBetween(0,1)*2-1)*90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
+            else if (bumper[LEFT]){
+                //linear = -0.1;
+                rotateThruAngle(DEG2RAD(-90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);        
+                moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
+            else if (bumper[RIGHT]){
+                //linear = -0.1;
+                rotateThruAngle(DEG2RAD(90), yaw, minLaserDist, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                moveThruDistance(0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                }
+HENRY END */
             else{
                 ROS_INFO("Entering random rotation with laser inf");
                 rotateThruAngle(randBetween(-M_PI, M_PI), yaw, minLaserDist, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);

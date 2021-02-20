@@ -1,10 +1,10 @@
 # MIE443 Contest 1: Autonomous Robot Search of an Environment - Group 18
 ## Group Members
-Farhan Wadia
+**Farhan Wadia**
 
-Henry Cueva
+**Henry Cueva**
 
-Yilin Huang
+**Yilin Huang**
 
 ## Execution Commands
 1. Begin by launching the simulated world

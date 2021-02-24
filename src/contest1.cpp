@@ -276,14 +276,14 @@ int main(int argc, char **argv){
                 angular = 0;
                 clearPathIters ++;
                 if (clearPathIters > 20){
-                    rotateThruAngle(copysign(randBetween(0.0, M_PI/6), chooseAngular(200, 0.55)), yaw, minLaserDist, 0.2, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                    rotateThruAngle(copysign(randBetween(M_PI/9, M_PI/6), chooseAngular(200, 0.55)), yaw, minLaserDist, 0.2, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
                     clearPathIters = 0;
                 }
             }
             else if(minLaserDist > slowThreshold && minLaserDist <= clearPathThreshold){
                 ROS_INFO("Slowing and following clearer path");
                 linear = 0.15;
-                rotateThruAngle(copysign(randBetween(0.0, M_PI/8), chooseAngular(100, 0.75)), yaw, minLaserDist, 0.15, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(copysign(randBetween(M_PI/12, M_PI/8), chooseAngular(100, 0.75)), yaw, minLaserDist, 0.15, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
             else if (minLaserDist > stopThreshold && minLaserDist <= slowThreshold){
                 ROS_INFO("Slowing down");

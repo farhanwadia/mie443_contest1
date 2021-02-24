@@ -31,7 +31,10 @@ void bumperCallback(const kobuki_msgs::BumperEvent::ConstPtr& msg){
 }
 
 void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg){
-	minLaserDist = std::numeric_limits<float>::infinity();
+	// Calculates minLaserDist overall, per side as minLSLaserDist and minRSLaserDist, 
+    // and the sum of laser measurements on each side LSLaserSum and RSLaserSum
+    
+    minLaserDist = std::numeric_limits<float>::infinity();
     minLSLaserDist = std::numeric_limits<float>::infinity();
     minRSLaserDist = std::numeric_limits<float>::infinity();
     LSLaserSum = 0, RSLaserSum = 0;
@@ -115,7 +118,7 @@ bool anyBumperPressed(){
 
 void moveThruDistance(float desired_dist, float move_speed, float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub,
                     uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    // Moves turtlebot desired_dist at move_speed. Negative desired_dist moves backwards, move_speed must be positive
+    // Moves turtlebot desired_dist at move_speed. Negative desired_dist moves backwards. Only magnitude of move_speed is used.
     int i = 0;
     float current_dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
     while (current_dist < fabs(desired_dist) && i < 100 && *pSecondsElapsed < 900){
@@ -134,7 +137,9 @@ void moveThruDistance(float desired_dist, float move_speed, float startX, float 
 
 void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, float set_linear, bool breakEarly, geometry_msgs::Twist* pVel, 
                      ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    //Rotates turtlebot angleRAD rad CW or CCW in place depending on angleRAD's sign at pi/8 rad/s. Make sure angleRAD is between +/- pi
+    // Rotates turtlebot angleRAD rad CW(-) or CCW(+) depending on angleRAD's sign at pi/8 rad/s. 
+    // Make sure angleRAD is between +/- pi
+    // Use set_linear = 0 to rotate in place
     int i = 0;
     float clearPathThreshold = 0.75, maxLaserThreshold = 7;
     ROS_INFO("In rotating thru. \n Start yaw: %f \n Current yaw: %f \n minLaserDistance %f \n Desired angle: %f", yawStart, yaw, minLaserDist, angleRAD);
@@ -166,37 +171,13 @@ void rotateThruAngle(float angleRAD, float yawStart, float laserDistStart, float
     }
 }
 
-void circularPathMove(float R, float theta, float speed, bool breakEarly, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
-                      const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    // Moves the turtlebot on a circular path of const radius R through angle theta at speed speed.
-    // Use negative theta to move CW. Keep theta within -pi to pi. Use R > 0.25
-    int i = 0;
-    float currentTheta = 0, dTheta = copysign(DEG2RAD(5), theta);
-    float currentX = R*cosf(currentTheta), currentY = R*sinf(currentTheta);
-    float dx = R*(cosf(currentTheta + dTheta) - cosf(currentTheta)), dy = R*(sinf(currentTheta + dTheta) - sinf(currentTheta));
-
-    while (fabs(currentTheta) < fabs(theta) && i < 300 && *pSecondsElapsed < 900){
-        // Move to the desired point by changing the orientation and then moving straight
-        rotateThruAngle(atan2f(dy, dx), yaw, minLaserDist, 0, breakEarly, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-        moveThruDistance(sqrt(pow(dx, 2) + pow(dy, 2)), speed, posX, posY, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-
-        // Update calculations for next iteration
-        currentTheta += dTheta;
-        currentX = R*cosf(currentTheta);
-        currentY = R*sinf(currentTheta);
-        dx = R*(cosf(currentTheta + dTheta) - cosf(currentTheta));
-        dy = R*(sinf(currentTheta + dTheta) - sinf(currentTheta));
-        i++;
-    }
-}
-
-float chooseAngular(float laserSideThreshold, float laserSideSumThreshold, float probSpinToLarger){
+float chooseAngular(float laserSideSumThreshold, float probSpinToLarger){
     // Chooses the angular velocity and direction
     // Can also call this in second argument of copysign() to only extract a direction (e.g. for a rotation)
     float prob = randBetween(0.0, 1.0), angular_vel = M_PI/8, maxLaserThreshold = 7;
     ros::spinOnce();
     if(fabs(fabs(LSLaserSum) - fabs(RSLaserSum)) > laserSideSumThreshold){
-        //If one side's laser distance > other side by more than laserSideThreshold, go to that side
+        //If one side's laser distance > other side by more than laserSideSumThreshold, go to that side
         if(fabs(LSLaserSum) - fabs(RSLaserSum) > laserSideSumThreshold){
             ROS_INFO("LS >> RS. Spin CCW");
             angular_vel = randBetween(M_PI/16, M_PI/8); //improves gmapping resolution compared to always using constant value
@@ -209,7 +190,7 @@ float chooseAngular(float laserSideThreshold, float laserSideSumThreshold, float
     else{
         // Laser distances approx. equal. Go to larger at probSpinToLarger probability
         ROS_INFO("LS ~ RS. Spinning to larger at %.2f chance", probSpinToLarger);
-        if ((fabs(minLSLaserDist) > fabs(minRSLaserDist) || fabs(LSLaserSum) > fabs(RSLaserSum)) && prob < probSpinToLarger){
+        if ((fabs(LSLaserSum) > fabs(RSLaserSum) || fabs(minLSLaserDist) > fabs(minRSLaserDist)) && prob < probSpinToLarger){
             angular_vel = randBetween(M_PI/16, M_PI/8); 
         }
         else{
@@ -221,7 +202,6 @@ float chooseAngular(float laserSideThreshold, float laserSideSumThreshold, float
 
 void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
                          const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    float laserSideThreshold = 0.15;
     bool any_bumper_pressed = true;
     any_bumper_pressed = anyBumperPressed();
     
@@ -241,130 +221,22 @@ void bumperPressedAction(geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, u
         else if (bumper[CENTER]){
             ROS_INFO("Center hit. Move back and spin");
             moveThruDistance(-0.25, 0.2, posX, posY, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-            rotateThruAngle(copysign(M_PI/2, chooseAngular(0.15, 150, 0.75)), yaw, minLaserDist, 0, false, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+            rotateThruAngle(copysign(M_PI/2, chooseAngular(150, 0.75)), yaw, minLaserDist, 0, false, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
         }
     }
     update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
 }
 
-float shiftPos(float angle){
-    //Takes in an angle in radians, and if it is negative, adds 2pi to it
-    // i.e. angles from -pi to 0 will convert to be between pi and 2pi
-    if(angle < 0){
-        angle = 2*M_PI + angle;
-    }
-    return angle;
-}
-
-float shiftNeg(float angle){
-    //Takes in an angle in radians, and if it is > pi, subtracts 2pi from it
-    // i.e. angles from pi to 2pi will convert to be between -pi and 0
-    if(angle > M_PI){
-        angle = angle - 2*M_PI;
-    }
-    return angle;
-}
-
-float findBestAngle(float yawStart, bool breakEarly, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
-                    const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    //Spins 2pi and returns the angle to the centre of the space that had the most laser distances over threshold
-    int i = 0, startIndex = 0, bestIndex = 0, largestGroup = 0, direction = 1;
-    float threshold = 0.75, maxLaserThreshold = 7, bestAngle = 0;
-    std::vector<float> yaws(1);
-    std::vector<bool> overThreshold(1);
-
-    if (minRSLaserDist > minLSLaserDist){
-        direction = -1;
-    }
-
-    yawStart = shiftPos(yawStart);
-    while (shiftPos(shiftPos(yaw) - yawStart) < fabs(2*M_PI-0.1) && i < 500 && *pSecondsElapsed < 900){
-        ros::spinOnce();
-        ROS_INFO("Finding best angle. \n Start yaw: %f \n Current yaw: %f \n", yawStart, shiftPos(yaw));
-        ROS_INFO("Condition check %i \n LS: %f \n RS %f \n", shiftPos(shiftPos(yaw) - yawStart) < fabs(2*M_PI-0.1), shiftPos(shiftPos(yaw) - yawStart), fabs(2*M_PI-0.1));
-        angular = direction*M_PI/6;
-        linear = 0;
-        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
-    
-        //Save angles relative to yawStart and if laser distances were over the threshold
-        yaws.push_back(shiftPos(shiftPos(yaw) - yawStart));
-        overThreshold.push_back(minLaserDist > threshold && minLaserDist < maxLaserThreshold);
-
-        //Move forward and return early if angular velocity small; likely stuck
-        if(fabs(omega) <  0.02 && i > 100){
-            ROS_INFO("Moving forward and braking out. Likely stuck.");
-            moveThruDistance(0.1, 0.1, posX, posY, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-            break;
-        }
-
-        //Return early @ current heading if breakEarly is set True
-        if (breakEarly && minLaserDist > threshold && minLaserDist < maxLaserThreshold){
-            return bestAngle;
-        }
-        
-        i += 1;
-    }
-
-    //Find the start index of the largest group of True's in overThreshold, and the group size
-    i = 0;
-    while(i < yaws.size()){
-        if (overThreshold[i] == false){
-            i++;
-        }
-        else{
-            startIndex = i;
-            while(overThreshold[i] == true){
-                i++;
-            }
-            if (i-startIndex > largestGroup){
-                largestGroup = i - startIndex;
-                bestIndex = startIndex;
-            }
-        }
-    }
-
-    //Get desired angle at the midpoint of the largest group over threshold
-    bestAngle = yaws[bestIndex + int((largestGroup-1)/2)];
-    bestAngle = shiftNeg(bestAngle); //Convert coordinates back to (-pi, pi) rather than (0, 2pi)
-
-    ROS_INFO("Best angle is: %f", bestAngle);
-    return bestAngle;
-}
-
-bool checkIfStuck(float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
-                  const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
-    int i = 0, numIterations = 75;
-    float dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
-    ROS_INFO("Checking if I'm stuck. \n Start x pos: %f \n Current x pos: %f", startX, posX);
-    
-    while ((dist <= 0.05 || fabs(omega) < 0.02) && i < numIterations && *pSecondsElapsed < 900){
-        ros::spinOnce();
-        ROS_INFO("Likely stuck. Start x pos: %f \n Current x pos: %f \n Iter: %i", startX, posX, i);
-        update(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate); // publish linear and angular
-        dist = sqrt(pow(posX-startX, 2) + pow(posY-startY, 2));
-        i +=1;
-
-        if(anyBumperPressed()){
-            ROS_INFO("Bumper pressed");
-            bumperPressedAction(pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-            break;
-        } 
-        if(i == numIterations - 1){
-            return true;
-        }
-    }
-    return false;
-}
-
 void moveAfterStuck(float startX, float startY, geometry_msgs::Twist* pVel, ros::Publisher* pVel_pub, uint64_t* pSecondsElapsed, 
                     const std::chrono::time_point<std::chrono::system_clock> start, ros::Rate* pLoop_rate){
+    // Handles trying to break the turtlebot out of being stuck
     int direction = 1;
     ROS_INFO("Moving out of stuck area");
     if (minLaserDist < 0.45 || minLaserDist > 7){
         direction = -1;
     }
     moveThruDistance(direction*0.15, 0.1, posX, posY, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
-    rotateThruAngle(copysign(M_PI, chooseAngular(0.15, 50, 1.0)), yaw, minLaserDist, 0, true, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
+    rotateThruAngle(copysign(M_PI, chooseAngular(50, 0.9)), yaw, minLaserDist, 0, true, pVel, pVel_pub, pSecondsElapsed, start, pLoop_rate);
 }
 
 int main(int argc, char **argv){
@@ -380,7 +252,7 @@ int main(int argc, char **argv){
     geometry_msgs::Twist vel; 
     
     ros::Rate loop_rate(10);
-    float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0, laserSideThreshold = 0.15;
+    float maxLaserThreshold = 7, clearPathThreshold = 0.75, slowThreshold = 0.6, stopThreshold = 0;
     float bestAngle = 0, prob = 1, stuckStartX = posX, stuckStartY = posY;
     int clearPathIters = 0, checkStuckIters = 0;
 
@@ -395,10 +267,6 @@ int main(int argc, char **argv){
 
         bool any_bumper_pressed = anyBumperPressed();
 
-        //auto r = std::async(std::launch::async, checkIfStuck(posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate));
-        //bool result = r.get(); 
-        //checkIfStuck(posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-
         prob = randBetween(0.0, 1.0);
 
         if (!any_bumper_pressed && minLaserDist < maxLaserThreshold){
@@ -408,28 +276,25 @@ int main(int argc, char **argv){
                 angular = 0;
                 clearPathIters ++;
                 if (clearPathIters > 20){
-                    rotateThruAngle(copysign(M_PI/6, chooseAngular(laserSideThreshold, 200, 0.55)), yaw, minLaserDist, 0.2, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                    rotateThruAngle(copysign(randBetween(0.0, M_PI/6), chooseAngular(200, 0.55)), yaw, minLaserDist, 0.2, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
                     clearPathIters = 0;
                 }
             }
             else if(minLaserDist > slowThreshold && minLaserDist <= clearPathThreshold){
                 ROS_INFO("Slowing and following clearer path");
                 linear = 0.15;
-                rotateThruAngle(copysign(M_PI/8, chooseAngular(laserSideThreshold, 100, 0.75)), yaw, minLaserDist, 0.15, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
+                rotateThruAngle(copysign(randBetween(0.0, M_PI/8), chooseAngular(100, 0.75)), yaw, minLaserDist, 0.15, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             }
             else if (minLaserDist > stopThreshold && minLaserDist <= slowThreshold){
                 ROS_INFO("Slowing down");
                 linear = 0.1;
-                rotateThruAngle(copysign(M_PI, chooseAngular(laserSideThreshold, 25, 0.9)), yaw, minLaserDist, 0.1, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate); 
+                rotateThruAngle(copysign(M_PI, chooseAngular(25, 0.9)), yaw, minLaserDist, 0.1, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate); 
                 clearPathIters = 0;  
             }
         }
         else if (minLaserDist > maxLaserThreshold && !any_bumper_pressed){
             ROS_INFO("Laser inf, bumper free. Moving back");
-            //bestAngle = findBestAngle(yaw, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            //rotateThruAngle(bestAngle, yaw, minLaserDist, 0.0, false, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
             moveThruDistance(-0.7, 0.1, posX, posY, &vel, &vel_pub, &secondsElapsed, start, &loop_rate);
-            //rotateThruAngle(copysign(M_PI, chooseAngular(laserSideThreshold, 5, 0.95)), yaw, minLaserDist, 0.05, true, &vel, &vel_pub, &secondsElapsed, start, &loop_rate); 
             clearPathIters = 0;
         }
         else if (any_bumper_pressed){
